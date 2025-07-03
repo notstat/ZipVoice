@@ -15,20 +15,41 @@ def prepare_elise_manifests(output_dir: Path):
     """Prepare Lhotse manifests for Elise dataset"""
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Load dataset
+    # Load dataset - force redownload if there are cache issues
     logging.info("Loading Elise dataset...")
-    dataset = load_dataset("MrDragonFox/Elise", split="train")
+    try:
+        # Try loading with streaming first to avoid cache issues
+        dataset = load_dataset("MrDragonFox/Elise", split="train", streaming=False)
+        # Convert to list if it's an iterable dataset
+        if hasattr(dataset, '__iter__') and not hasattr(dataset, '__len__'):
+            dataset = list(dataset)
+    except Exception as e:
+        logging.warning(f"Failed to load with default method: {e}")
+        # Force download without cache
+        dataset = load_dataset("MrDragonFox/Elise", split="train", cache_dir=None, download_mode="force_redownload")
     
     cuts = []
     
     # Create a temporary directory to store audio files
     # This is needed because Lhotse's compute_fbank expects file paths
-    temp_dir = Path("data/elise_audio_temp")
+    temp_dir = Path("data/elise_audio")
     temp_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Handle both dataset formats
+    if hasattr(dataset, '__len__'):
+        total_examples = len(dataset)
+    else:
+        # If it's a generator, we don't know the total length
+        total_examples = None
+        dataset = list(dataset)
+        total_examples = len(dataset)
     
     for idx, example in enumerate(dataset):
         if idx % 100 == 0:
-            logging.info(f"Processing {idx}/{len(dataset)}")
+            if total_examples:
+                logging.info(f"Processing {idx}/{total_examples}")
+            else:
+                logging.info(f"Processing {idx}...")
             
         # Get audio data
         audio_data = example["audio"]
@@ -41,6 +62,14 @@ def prepare_elise_manifests(output_dir: Path):
             # If it's directly a wav file or array
             audio_array = audio_data
             sampling_rate = 24000  # Default, adjust as needed
+        
+        # Ensure audio_array is a numpy array
+        if not isinstance(audio_array, np.ndarray):
+            audio_array = np.array(audio_array)
+        
+        # Ensure audio is 1D
+        if audio_array.ndim > 1:
+            audio_array = audio_array.squeeze()
         
         # Create unique ID
         audio_id = f"elise_{idx:06d}"
@@ -104,4 +133,12 @@ def prepare_elise_manifests(output_dir: Path):
     logging.info(f"Audio files saved in {temp_dir}")
 
 if __name__ == "__main__":
+    # Clear any dataset cache that might be causing issues
+    import shutil
+    cache_dir = Path.home() / ".cache" / "huggingface" / "datasets"
+    elise_cache = cache_dir / "MrDragonFox___elise"
+    if elise_cache.exists():
+        logging.info(f"Clearing cache at {elise_cache}")
+        shutil.rmtree(elise_cache)
+    
     prepare_elise_manifests(Path("data/manifests"))
