@@ -931,7 +931,7 @@ def run(rank, world_size, args):
     model = get_model(params)
     if params.checkpoint is not None:
         logging.info(f"Loading pre-trained model from {params.checkpoint}")
-        _ = load_checkpoint(filename=params.checkpoint, model=model, strict=True)
+        _ = load_checkpoint(filename=params.checkpoint, model=model, strict=False)
     num_param = sum([p.numel() for p in model.parameters()])
     logging.info(f"Number of parameters : {num_param}")
 
