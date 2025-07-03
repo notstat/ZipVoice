@@ -356,6 +356,20 @@ class TtsDataModule:
             self.args.manifest_dir / "libritts_cuts_dev-clean.jsonl.gz"
         )
 
+    @lru_cache()
+    def train_elise_cuts(self) -> CutSet:
+        logging.info("Loading Elise train cuts")
+        return load_manifest_lazy(
+            self.args.manifest_dir / "elise_cuts_train.jsonl.gz"
+        )
+
+    @lru_cache()
+    def dev_elise_cuts(self) -> CutSet:
+        logging.info("Loading Elise dev cuts")
+        return load_manifest_lazy(
+            self.args.manifest_dir / "elise_cuts_dev.jsonl.gz"
+        )
+
 
 class SpeechSynthesisDataset(torch.utils.data.Dataset):
     """
