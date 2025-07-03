@@ -102,7 +102,7 @@ def get_parser():
         "--dataset",
         type=str,
         default="emilia",
-        choices=["emilia", "libritts"],
+        choices=["emilia", "libritts", "elise"],
         help="The used training dataset for the model to inference",
     )
 
@@ -127,6 +127,10 @@ def main():
     elif params.dataset == "libritts":
         tokenizer = LibriTTSTokenizer(
             token_file=params.token_file, token_type=params.token_type
+        )
+    elif params.dataset == "elise":
+        tokenizer = LibriTTSTokenizer(  # Use char-based tokenizer like LibriTTS
+            token_file=params.token_file, token_type="char"
         )
 
     params.vocab_size = tokenizer.vocab_size
