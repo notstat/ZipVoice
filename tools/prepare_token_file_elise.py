@@ -24,17 +24,15 @@ def get_args():
 
 def prepare_tokens(manifest_file: Path, token_file: Path):
     """
-    Builds a vocabulary by combining:
-    1. Base espeak phonemes.
-    2. Sound/action tags like <laugh> as whole units.
-    3. Emotion words from inside [emotion, words] tags.
-    4. The bracket characters [ and ] themselves.
+    Builds a vocabulary by:
+    1. Writing all original espeak phonemes with their original IDs.
+    2. Appending any new custom tags with new, sequential IDs.
     """
-    # 1. Start with espeak phonemes and hardcoded bracket tokens
-    final_tokens = {"_", "[", "]"}
-    final_tokens.update(get_espeak_map().keys())
+    # 1. Get the base espeak phonemes and their original IDs
+    espeak_map = get_espeak_map()
+    espeak_tokens = {token: ids[0] for token, ids in espeak_map.items()}
 
-    # 2. Scan the manifest for special tags
+    # 2. Scan the manifest to find custom tags that need to be added
     logging.info(f"Scanning manifest {manifest_file} for special tags...")
     if not manifest_file.exists():
         logging.error(f"Manifest file not found at {manifest_file}. Please ensure Stage 0 of prepare_elise.sh has run.")
@@ -44,43 +42,43 @@ def prepare_tokens(manifest_file: Path, token_file: Path):
     angle_tag_pattern = re.compile(r"(<[^>]+>)")
     square_tag_pattern = re.compile(r"\[([^\]]+)\]")
     
-    found_angle_tags = set()
-    found_emotion_words = set()
+    custom_tokens_to_add = {"[", "]"}
 
     for cut in manifest:
         text = cut.supervisions[0].text
         
-        # Find all <...> tags and add them as whole tokens
-        angle_tags = angle_tag_pattern.findall(text)
-        found_angle_tags.update(angle_tags)
+        # Find all <...> tags
+        custom_tokens_to_add.update(angle_tag_pattern.findall(text))
 
         # Find all [...] tags and extract the words inside
-        square_tag_matches = square_tag_pattern.findall(text)
-        for match_content in square_tag_matches:
-            # Extract individual words
-            words = re.findall(r'\w+', match_content)
-            found_emotion_words.update(words)
-
-    if found_angle_tags:
-        logging.info(f"Found {len(found_angle_tags)} unique <...> tags: {sorted(list(found_angle_tags))}")
-        final_tokens.update(found_angle_tags)
-
-    if found_emotion_words:
-        logging.info(f"Found {len(found_emotion_words)} unique emotion words: {sorted(list(found_emotion_words))}")
-        final_tokens.update(found_emotion_words)
-
-    # 3. Create the final token list and write to file
-    sorted_tokens = sorted(list(final_tokens))
-    if "_" in sorted_tokens:
-        sorted_tokens.remove("_")
+        for match_content in square_tag_pattern.findall(text):
+            custom_tokens_to_add.update(re.findall(r'\w+', match_content))
     
-    result = ["_"] + sorted_tokens
+    # Filter out any custom tokens that might already be in espeak's vocabulary
+    new_tokens = sorted([t for t in custom_tokens_to_add if t not in espeak_tokens])
+
+    # 3. Write the token file, preserving original espeak IDs
+    # Sort espeak tokens by their ID for a deterministic file layout
+    sorted_espeak = sorted(espeak_tokens.items(), key=lambda item: item[1])
     
     with open(token_file, "w", encoding="utf-8") as f:
-        for index, token in enumerate(result):
-            f.write(f"{token}\t{index}\n")
+        # First, write all the original espeak tokens with their original IDs
+        for token, token_id in sorted_espeak:
+            f.write(f"{token}\t{token_id}\n")
+
+        # Find the maximum ID from the espeak tokens
+        max_id = sorted_espeak[-1][1] if sorted_espeak else -1
+
+        # Now, append all the new custom tokens with sequential IDs
+        next_id = max_id + 1
+        for token in new_tokens:
+            f.write(f"{token}\t{next_id}\n")
+            next_id += 1
     
-    logging.info(f"Generated token file '{token_file}' with {len(result)} tokens.")
+    logging.info(f"Generated token file '{token_file}' with {next_id} total tokens.")
+    if new_tokens:
+        logging.info(f"Added {len(new_tokens)} custom tokens, including: {new_tokens[:5]}...")
+
 
 if __name__ == "__main__":
     formatter = "%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s"
