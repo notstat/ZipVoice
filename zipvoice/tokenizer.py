@@ -380,19 +380,19 @@ class EmiliaTokenizer(Tokenizer):
     def tokenize_pinyin(self, text: str) -> List[str]:
         try:
             assert text.startswith("<") and text.endswith(">")
-            text = text.lstrip("<").rstrip(">")
-            # valid pinyin (in tone3 style) is alphabet + 1 number in [1-5].
-            if not (text[0:-1].isalpha() and text[-1] in ("1", "2", "3", "4", "5")):
-                logging.warning(
-                    f"Strings enclosed with <> should be pinyin, \
-                    but got: {text}. Skipped it. "
-                )
-                return []
+            text_content = text.lstrip("<").rstrip(">")
+            
+            # Check if it's valid pinyin (alphabet + number 1-5)
+            if text_content[0:-1].isalpha() and text_content[-1] in ("1", "2", "3", "4", "5"):
+                # It's actual pinyin, process it
+                return self.seperate_pinyin(text_content)
             else:
-                return self.seperate_pinyin(text)
+                # It's not pinyin, treat it like a tag
+                return [text]  # Return the full <...> string as one token
+                
         except Exception as ex:
             logging.warning(f"Tokenize pinyin failed: {ex}")
-            return []
+            return [text]  # Return original text on error
 
     def seperate_pinyin(self, text: str) -> List[str]:
         """
