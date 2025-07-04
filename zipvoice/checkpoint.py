@@ -244,8 +244,8 @@ def average_checkpoints_with_averaged_model(
       device:
         Move checkpoints to this device before averaging.
     """
-    state_dict_start = torch.load(filename_start, map_location=device)
-    state_dict_end = torch.load(filename_end, map_location=device)
+    state_dict_start = torch.load(filename_start, map_location=device, weights_only=False)
+    state_dict_end = torch.load(filename_end, map_location=device, weights_only=False)
 
     average_period = state_dict_start["average_period"]
 
