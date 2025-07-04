@@ -422,17 +422,6 @@ class SpeechSynthesisDataset(torch.utils.data.Dataset):
         ), "Feature transforms must be Callable"
         self.feature_transforms = feature_transforms
 
-    def tokenize_text(c: Cut, tokenizer):
-        # SpeechSynthesisDataset needs normalized_text, see tts_datamodule for details
-        if hasattr(c.supervisions[0], "normalized_text"):
-            text = c.supervisions[0].normalized_text
-        else:
-            c.supervisions[0].normalized_text = c.supervisions[0].text
-            text = c.supervisions[0].text
-        tokens = tokenizer.texts_to_token_ids([text])
-        c.supervisions[0].tokens = tokens[0]
-        return c
-
     def __getitem__(self, cuts: CutSet) -> Dict[str, torch.Tensor]:
         validate_for_tts(cuts)
 
