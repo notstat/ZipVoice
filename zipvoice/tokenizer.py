@@ -483,16 +483,13 @@ class EmiliaTokenizer(Tokenizer):
                 temp_seg += text[i]
                 temp_lang = types[i]
             else:
-                if temp_lang == "other":
-                    temp_seg += text[i]
+                # If the type changes, we start a new segment.
+                if types[i] != temp_lang:
+                    segments.append((temp_seg, temp_lang))
+                    temp_seg = text[i]
                     temp_lang = types[i]
-                else:
-                    if types[i] in [temp_lang, "other"]:
-                        temp_seg += text[i]
-                    else:
-                        segments.append((temp_seg, temp_lang))
-                        temp_seg = text[i]
-                        temp_lang = types[i]
+                else:  # Same type, merge.
+                    temp_seg += text[i]
 
         segments.append((temp_seg, temp_lang))
 
