@@ -916,8 +916,8 @@ def run(rank, world_size, args):
             token_file=params.token_file, token_type=params.token_type
         )
     elif params.dataset == "elise":
-        tokenizer = LibriTTSTokenizer(  # Use char-based tokenizer like LibriTTS
-            token_file=params.token_file, token_type="char"
+        tokenizer = EmiliaTokenizer(  # Use char-based tokenizer like LibriTTS
+            token_file=params.token_file, token_type=params.token_type
         )
     params.vocab_size = tokenizer.vocab_size
     params.pad_id = tokenizer.pad_id
