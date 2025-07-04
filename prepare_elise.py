@@ -103,7 +103,7 @@ def prepare_elise_manifests(output_dir: Path):
             channel=0,
             text=example["text"],
             language="en",
-            speaker=example.get("source", "default_speaker")  # Use source as speaker if available
+            speaker=example.get("speaker", "default_speaker")  # Use source as speaker if available
         )
         
         # Create Cut
