@@ -218,7 +218,7 @@ class LibriTTSEnglishTextNormalizer(EnglishTextNormalizer):
         return text
 
     def _remove_unnecessary_symbols(self, text: str) -> str:
-        text = re.sub(r"[\(\)\[\]\<\>\"]+", "", text)
+        #text = re.sub(r"[\(\)\[\]\<\>\"]+", "", text)
         return text
 
 
