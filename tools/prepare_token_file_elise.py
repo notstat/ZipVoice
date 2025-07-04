@@ -26,8 +26,11 @@ def prepare_tokens(manifest_file: Path, token_file: Path):
     """
     Builds a vocabulary by:
     1. Writing all original espeak phonemes with their original IDs.
-    2. Appending any new custom tags with new, sequential IDs.
+    2. Appending any new custom tags with new, sequential IDs starting from 3000.
     """
+    # Define a high starting ID for custom tokens to avoid any conflicts.
+    CUSTOM_TOKEN_START_ID = 3000
+
     # 1. Get the base espeak phonemes and their original IDs
     espeak_map = get_espeak_map()
     espeak_tokens = {token: ids[0] for token, ids in espeak_map.items()}
@@ -66,18 +69,17 @@ def prepare_tokens(manifest_file: Path, token_file: Path):
         for token, token_id in sorted_espeak:
             f.write(f"{token}\t{token_id}\n")
 
-        # Find the maximum ID from the espeak tokens
-        max_id = sorted_espeak[-1][1] if sorted_espeak else -1
-
-        # Now, append all the new custom tokens with sequential IDs
-        next_id = max_id + 1
+        # Now, append all the new custom tokens with sequential IDs starting from 3000
+        logging.info(f"Assigning new custom tokens starting from ID {CUSTOM_TOKEN_START_ID}")
+        next_id = CUSTOM_TOKEN_START_ID
         for token in new_tokens:
             f.write(f"{token}\t{next_id}\n")
             next_id += 1
     
-    logging.info(f"Generated token file '{token_file}' with {next_id} total tokens.")
+    total_tokens = len(sorted_espeak) + len(new_tokens)
+    logging.info(f"Generated token file '{token_file}' with {total_tokens} total tokens.")
     if new_tokens:
-        logging.info(f"Added {len(new_tokens)} custom tokens, including: {new_tokens[:5]}...")
+        logging.info(f"Added {len(new_tokens)} custom tokens. Examples: {new_tokens[:5]}...")
 
 
 if __name__ == "__main__":
