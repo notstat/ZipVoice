@@ -314,7 +314,13 @@ class EmiliaTokenizer(Tokenizer):
                 elif seg[1] == "pinyin":
                     phoneme = self.tokenize_pinyin(seg[0])
                 elif seg[1] == "tag":
-                    phoneme = [seg[0]]
+                    # seg[0] is a string like '[gentle, comforting]'
+                    # We need to break it down into its components.
+                    content = seg[0].strip("[]")
+                    # Use findall to extract only the words
+                    words = re.findall(r'\w+', content)
+                    # Re-add the brackets as separate tokens
+                    phoneme = ['['] + words + [']']
                 else:
                     logging.warning(
                         f"No English or Chinese characters found, \
