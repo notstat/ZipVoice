@@ -20,41 +20,27 @@ def prepare_elise_manifests(output_dir: Path):
     if not hf_token:
         raise ValueError("Please set the 'hf_token' environment variable")
     
-    # Load dataset - force redownload if there are cache issues
-    logging.info("Loading Elise dataset...")
-    try:
-        # Try loading with streaming first to avoid cache issues
-        dataset = load_dataset("setfunctionenvironment/provoic3ewy", split="train", streaming=False, token=hf_token)
-        # Convert to list if it's an iterable dataset
-        if hasattr(dataset, '__iter__') and not hasattr(dataset, '__len__'):
-            dataset = list(dataset)
-    except Exception as e:
-        logging.warning(f"Failed to load with default method: {e}")
-        # Force download without cache
-        dataset = load_dataset("setfunctionenvironment/provoic3ewy", split="train", cache_dir=None, download_mode="force_redownload", token=hf_token)
-
-    cuts = []
+    # Load dataset in streaming mode to avoid memory issues
+    logging.info("Loading Elise dataset in streaming mode...")
+    dataset = load_dataset(
+        "setfunctionenvironment/provoic3ewy", 
+        split="train", 
+        streaming=True,  # This is crucial for large datasets
+        token=hf_token
+    )
     
     # Create a temporary directory to store audio files
-    # This is needed because Lhotse's compute_fbank expects file paths
     temp_dir = Path("data/elise_audio")
     temp_dir.mkdir(parents=True, exist_ok=True)
     
-    # Handle both dataset formats
-    if hasattr(dataset, '__len__'):
-        total_examples = len(dataset)
-    else:
-        # If it's a generator, we don't know the total length
-        total_examples = None
-        dataset = list(dataset)
-        total_examples = len(dataset)
+    # Process in batches and save periodically
+    batch_size = 1000
+    cuts = []
+    all_cuts = []
     
     for idx, example in enumerate(dataset):
         if idx % 100 == 0:
-            if total_examples:
-                logging.info(f"Processing {idx}/{total_examples}")
-            else:
-                logging.info(f"Processing {idx}...")
+            logging.info(f"Processing example {idx}...")
             
         # Get audio data
         audio_data = example["audio"]
@@ -121,14 +107,26 @@ def prepare_elise_manifests(output_dir: Path):
             supervisions=[supervision],
         )
         cuts.append(cut)
+        
+        # Save cuts in batches to avoid memory issues
+        if len(cuts) >= batch_size:
+            all_cuts.extend(cuts)
+            cuts = []
+            logging.info(f"Processed {len(all_cuts)} cuts so far...")
+    
+    # Add any remaining cuts
+    if cuts:
+        all_cuts.extend(cuts)
+    
+    logging.info(f"Total cuts processed: {len(all_cuts)}")
     
     # Create CutSet
-    cut_set = CutSet.from_cuts(cuts)
+    cut_set = CutSet.from_cuts(all_cuts)
     
     # Split into train/dev (95%/5%)
     train_size = int(0.95 * len(cut_set))
-    train_cuts = CutSet.from_cuts(cuts[:train_size])
-    dev_cuts = CutSet.from_cuts(cuts[train_size:])
+    train_cuts = CutSet.from_cuts(all_cuts[:train_size])
+    dev_cuts = CutSet.from_cuts(all_cuts[train_size:])
     
     # Save manifests
     train_cuts.to_file(output_dir / "elise_cuts_train.jsonl.gz")
@@ -141,7 +139,7 @@ if __name__ == "__main__":
     # Clear any dataset cache that might be causing issues
     import shutil
     cache_dir = Path.home() / ".cache" / "huggingface" / "datasets"
-    elise_cache = cache_dir / "MrDragonFox___elise"
+    elise_cache = cache_dir / "setfunctionenvironment___provoic3ewy"
     if elise_cache.exists():
         logging.info(f"Clearing cache at {elise_cache}")
         shutil.rmtree(elise_cache)
