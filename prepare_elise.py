@@ -8,6 +8,7 @@ import soundfile as sf
 import numpy as np
 import tempfile
 import logging
+import random
 
 logging.basicConfig(level=logging.INFO)
 
@@ -33,10 +34,15 @@ def prepare_elise_manifests(output_dir: Path):
     temp_dir = Path("data/elise_audio")
     temp_dir.mkdir(parents=True, exist_ok=True)
     
+    # Create temp directory for intermediate manifest files
+    temp_manifest_dir = output_dir / "temp"
+    temp_manifest_dir.mkdir(parents=True, exist_ok=True)
+    
     # Process in batches and save periodically
     batch_size = 1000
+    batch_num = 0
     cuts = []
-    all_cuts = []
+    total_processed = 0
     
     for idx, example in enumerate(dataset):
         if idx % 100 == 0:
@@ -110,29 +116,95 @@ def prepare_elise_manifests(output_dir: Path):
         
         # Save cuts in batches to avoid memory issues
         if len(cuts) >= batch_size:
-            all_cuts.extend(cuts)
+            # Save this batch to a temporary file
+            batch_file = temp_manifest_dir / f"batch_{batch_num:04d}.jsonl.gz"
+            CutSet.from_cuts(cuts).to_file(batch_file)
+            
+            total_processed += len(cuts)
+            logging.info(f"Saved batch {batch_num} with {len(cuts)} cuts. Total processed: {total_processed}")
+            
+            # Clear the cuts list to free memory
             cuts = []
-            logging.info(f"Processed {len(all_cuts)} cuts so far...")
+            batch_num += 1
     
-    # Add any remaining cuts
+    # Save any remaining cuts
     if cuts:
-        all_cuts.extend(cuts)
+        batch_file = temp_manifest_dir / f"batch_{batch_num:04d}.jsonl.gz"
+        CutSet.from_cuts(cuts).to_file(batch_file)
+        total_processed += len(cuts)
+        logging.info(f"Saved final batch {batch_num} with {len(cuts)} cuts. Total processed: {total_processed}")
     
-    logging.info(f"Total cuts processed: {len(all_cuts)}")
+    logging.info(f"Total cuts processed: {total_processed}")
     
-    # Create CutSet
-    cut_set = CutSet.from_cuts(all_cuts)
+    # Now merge all batch files into train/dev splits
+    logging.info("Merging batch files and creating train/dev splits...")
     
-    # Split into train/dev (95%/5%)
-    train_size = int(0.95 * len(cut_set))
-    train_cuts = CutSet.from_cuts(all_cuts[:train_size])
-    dev_cuts = CutSet.from_cuts(all_cuts[train_size:])
+    # Load and merge all batches
+    all_batch_files = sorted(temp_manifest_dir.glob("batch_*.jsonl.gz"))
     
-    # Save manifests
-    train_cuts.to_file(output_dir / "elise_cuts_train.jsonl.gz")
-    dev_cuts.to_file(output_dir / "elise_cuts_dev.jsonl.gz")
+    # Calculate split sizes
+    train_size = int(0.95 * total_processed)
     
-    logging.info(f"Saved {len(train_cuts)} training cuts and {len(dev_cuts)} dev cuts")
+    # Process batches and write directly to train/dev files
+    train_cuts = []
+    dev_cuts = []
+    current_count = 0
+    
+    for batch_file in all_batch_files:
+        batch_cuts = CutSet.from_file(batch_file)
+        for cut in batch_cuts:
+            if current_count < train_size:
+                train_cuts.append(cut)
+            else:
+                dev_cuts.append(cut)
+            current_count += 1
+            
+            # Save incrementally to avoid memory issues
+            if len(train_cuts) >= batch_size:
+                # Append to train file
+                if not (output_dir / "elise_cuts_train.jsonl.gz").exists():
+                    CutSet.from_cuts(train_cuts).to_file(output_dir / "elise_cuts_train.jsonl.gz")
+                else:
+                    # Append mode
+                    with CutSet.open_writer(output_dir / "elise_cuts_train.jsonl.gz", mode="a") as writer:
+                        for cut in train_cuts:
+                            writer.write(cut)
+                train_cuts = []
+                
+            if len(dev_cuts) >= batch_size:
+                # Append to dev file
+                if not (output_dir / "elise_cuts_dev.jsonl.gz").exists():
+                    CutSet.from_cuts(dev_cuts).to_file(output_dir / "elise_cuts_dev.jsonl.gz")
+                else:
+                    # Append mode
+                    with CutSet.open_writer(output_dir / "elise_cuts_dev.jsonl.gz", mode="a") as writer:
+                        for cut in dev_cuts:
+                            writer.write(cut)
+                dev_cuts = []
+    
+    # Save any remaining cuts
+    if train_cuts:
+        if not (output_dir / "elise_cuts_train.jsonl.gz").exists():
+            CutSet.from_cuts(train_cuts).to_file(output_dir / "elise_cuts_train.jsonl.gz")
+        else:
+            with CutSet.open_writer(output_dir / "elise_cuts_train.jsonl.gz", mode="a") as writer:
+                for cut in train_cuts:
+                    writer.write(cut)
+    
+    if dev_cuts:
+        if not (output_dir / "elise_cuts_dev.jsonl.gz").exists():
+            CutSet.from_cuts(dev_cuts).to_file(output_dir / "elise_cuts_dev.jsonl.gz")
+        else:
+            with CutSet.open_writer(output_dir / "elise_cuts_dev.jsonl.gz", mode="a") as writer:
+                for cut in dev_cuts:
+                    writer.write(cut)
+    
+    # Clean up temporary files
+    logging.info("Cleaning up temporary files...")
+    import shutil
+    shutil.rmtree(temp_manifest_dir)
+    
+    logging.info(f"Saved {train_size} training cuts and {total_processed - train_size} dev cuts")
     logging.info(f"Audio files saved in {temp_dir}")
 
 if __name__ == "__main__":
