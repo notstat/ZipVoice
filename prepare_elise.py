@@ -15,19 +15,24 @@ def prepare_elise_manifests(output_dir: Path):
     """Prepare Lhotse manifests for Elise dataset"""
     output_dir.mkdir(parents=True, exist_ok=True)
     
+    # Get HF token from environment variable
+    hf_token = os.environ.get("hf_token")
+    if not hf_token:
+        raise ValueError("Please set the 'hf_token' environment variable")
+    
     # Load dataset - force redownload if there are cache issues
     logging.info("Loading Elise dataset...")
     try:
         # Try loading with streaming first to avoid cache issues
-        dataset = load_dataset("MrDragonFox/Elise", split="train", streaming=False)
+        dataset = load_dataset("setfunctionenvironment/provoic3ewy", split="train", streaming=False, token=hf_token)
         # Convert to list if it's an iterable dataset
         if hasattr(dataset, '__iter__') and not hasattr(dataset, '__len__'):
             dataset = list(dataset)
     except Exception as e:
         logging.warning(f"Failed to load with default method: {e}")
         # Force download without cache
-        dataset = load_dataset("MrDragonFox/Elise", split="train", cache_dir=None, download_mode="force_redownload")
-    
+        dataset = load_dataset("setfunctionenvironment/provoic3ewy", split="train", cache_dir=None, download_mode="force_redownload", token=hf_token)
+
     cuts = []
     
     # Create a temporary directory to store audio files
